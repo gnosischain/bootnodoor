@@ -1138,7 +1138,7 @@ func (s *Service) onFindNodeV5EL(msg *v5protocol.FindNode, sourceNode *v5node.No
 	localID := s.elLocalNode.ID()
 	allNodes := s.elTable.GetNodesByDistance(localID, msg.Distances, 8)
 
-	filteredNodes := s.filterNodesForRequester(allNodes, requester, true)
+	filteredNodes := s.filterNodesForRequester(allNodes, requester, true, "EL")
 
 	v5Nodes := make([]*v5node.Node, 0, len(filteredNodes))
 	for _, n := range filteredNodes {
@@ -1190,7 +1190,7 @@ func (s *Service) onFindNodeV5CL(msg *v5protocol.FindNode, sourceNode *v5node.No
 	localID := s.clLocalNode.ID()
 	allNodes := s.clTable.GetNodesByDistance(localID, msg.Distances, 8)
 
-	filteredNodes := s.filterNodesForRequester(allNodes, requester, true)
+	filteredNodes := s.filterNodesForRequester(allNodes, requester, true, "CL")
 
 	v5Nodes := make([]*v5node.Node, 0, len(filteredNodes))
 	for _, n := range filteredNodes {
@@ -1253,8 +1253,8 @@ func (s *Service) onFindNodeV4(from *v4node.Node, target []byte, requester *net.
 	// For v4, we find closest nodes to the target
 	allNodes := s.elTable.FindClosestNodes(targetID, 16)
 
-	// Filter for v4 support and LAN-aware filtering
-	filteredNodes := s.filterNodesForRequester(allNodes, requester, false)
+	// Filter for v4 support, LAN-aware filtering, and fork filtering
+	filteredNodes := s.filterNodesForRequester(allNodes, requester, false, "EL")
 
 	// Convert to v4 nodes
 	v4Nodes := make([]*v4node.Node, 0, len(filteredNodes))
@@ -1492,8 +1492,8 @@ func (s *Service) updateCLENRWithDiscoveredIP(ip net.IP, port uint16, isIPv6 boo
 	}
 }
 
-// filterNodesForRequester applies LAN-aware and protocol filtering.
-func (s *Service) filterNodesForRequester(nodeList []*nodes.Node, requester *net.UDPAddr, needsV5 bool) []*nodes.Node {
+// filterNodesForRequester applies LAN-aware, protocol, and fork filtering.
+func (s *Service) filterNodesForRequester(nodeList []*nodes.Node, requester *net.UDPAddr, needsV5 bool, layer string) []*nodes.Node {
 	requesterIsLAN := v5node.IsLANAddress(requester.IP)
 
 	filtered := make([]*nodes.Node, 0, len(nodeList))
@@ -1504,6 +1504,23 @@ func (s *Service) filterNodesForRequester(nodeList []*nodes.Node, requester *net
 		}
 		if !needsV5 && !n.HasV4() {
 			continue
+		}
+
+		// Apply fork filtering for responses
+		if s.enrManager != nil {
+			record := n.Record()
+			if record != nil {
+				switch layer {
+				case "CL":
+					if !s.enrManager.IsCurrentForkCL(record) {
+						continue
+					}
+				case "EL":
+					if !s.enrManager.IsCurrentForkEL(record) {
+						continue
+					}
+				}
+			}
 		}
 
 		// Apply LAN-aware filtering

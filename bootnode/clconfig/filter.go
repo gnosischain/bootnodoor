@@ -206,6 +206,34 @@ func (f *ForkDigestFilter) Filter(record *enr.Record) bool {
 	return false
 }
 
+// IsCurrentFork checks if a node's fork digest matches the current fork or is within the grace period.
+// Unlike Filter(), this does NOT accept historical digests — only current and grace-period old digests.
+// Use this for FINDNODE response filtering to avoid serving stale-fork peers.
+func (f *ForkDigestFilter) IsCurrentFork(record *enr.Record) bool {
+	var eth2Data []byte
+	if err := record.Get("eth2", &eth2Data); err != nil {
+		return false
+	}
+
+	forkDigest, err := ParseETH2Field(eth2Data)
+	if err != nil {
+		return false
+	}
+
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if forkDigest == f.currentForkDigest {
+		return true
+	}
+
+	if activationTime, exists := f.oldForkDigests[forkDigest]; exists {
+		return time.Since(activationTime) <= f.gracePeriod
+	}
+
+	return false
+}
+
 // Update updates the fork digest based on the current epoch.
 //
 // This should be called periodically (e.g., every 5 minutes) to detect fork activations.

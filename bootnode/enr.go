@@ -211,6 +211,23 @@ func (m *ENRManager) GetCLFilter() *clconfig.ForkDigestFilter {
 	return m.clFilter
 }
 
+// IsCurrentForkCL checks if a CL node's fork digest is current or within grace period.
+func (m *ENRManager) IsCurrentForkCL(record *enr.Record) bool {
+	if m.clFilter == nil {
+		return true
+	}
+	return m.clFilter.IsCurrentFork(record)
+}
+
+// IsCurrentForkEL checks if an EL node's fork ID is valid.
+func (m *ENRManager) IsCurrentForkEL(record *enr.Record) bool {
+	if m.elFilter == nil {
+		return true
+	}
+	ok, _ := m.FilterELNode(record)
+	return ok
+}
+
 // UpdateELENRWithIP updates the EL local ENR with a new IPv4 address and UDP port.
 func (m *ENRManager) UpdateELENRWithIP(ip net.IP, port uint16) error {
 	if m.elLocalNode == nil {
