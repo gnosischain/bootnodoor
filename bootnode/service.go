@@ -1596,6 +1596,41 @@ func (s *Service) ENRManager() *ENRManager {
 	return s.enrManager
 }
 
+// StartTime returns when the service was started.
+func (s *Service) StartTime() time.Time {
+	return s.startTime
+}
+
+// ELDiscv5Service returns the EL discv5 service (may be nil).
+func (s *Service) ELDiscv5Service() *discv5.Service {
+	return s.elDiscv5Service
+}
+
+// CLDiscv5Service returns the CL discv5 service (may be nil).
+func (s *Service) CLDiscv5Service() *discv5.Service {
+	return s.clDiscv5Service
+}
+
+// ELPingService returns the EL ping service (may be nil).
+func (s *Service) ELPingService() *services.PingService {
+	return s.elPingService
+}
+
+// CLPingService returns the CL ping service (may be nil).
+func (s *Service) CLPingService() *services.PingService {
+	return s.clPingService
+}
+
+// ELLookupService returns the EL lookup service (may be nil).
+func (s *Service) ELLookupService() *services.LookupService {
+	return s.elLookupService
+}
+
+// CLLookupService returns the CL lookup service (may be nil).
+func (s *Service) CLLookupService() *services.LookupService {
+	return s.clLookupService
+}
+
 // getELV5Handler returns the EL discv5 protocol handler (may be nil).
 func (s *Service) getELV5Handler() *v5protocol.Handler {
 	if s.elDiscv5Service != nil {

@@ -225,7 +225,7 @@ func (fh *FrontendHandler) getOverviewPageData() (*OverviewPageData, error) {
 	// Initialize page data
 	pageData := &OverviewPageData{
 		Status:    "Online",
-		StartTime: time.Now(),
+		StartTime: fh.bootnodeService.StartTime(),
 	}
 
 	// Get EL local node info
@@ -428,9 +428,97 @@ func (fh *FrontendHandler) getOverviewPageData() (*OverviewPageData, error) {
 		}
 	}
 
-	// Note: Detailed stats (lookups, pings, sessions, etc.) are not available
-	// through the public API of the new bootnode service. These would need to be
-	// exposed through additional methods if required.
+	// Aggregate handler stats from EL and CL discv5 services
+	if svc := fh.bootnodeService.ELDiscv5Service(); svc != nil {
+		if h := svc.Handler(); h != nil {
+			stats := h.GetStats()
+			pageData.PacketsReceived += stats.PacketsReceived
+			pageData.PacketsSent += stats.PacketsSent
+			pageData.InvalidPackets += stats.InvalidPackets
+			pageData.FilteredResponses += stats.FilteredResponses
+			pageData.FindNodeReceived += stats.FindNodeReceived
+			pageData.PendingHandshakes += stats.PendingHandshakes
+			pageData.PendingChallenges += stats.PendingChallenges
+		}
+		if sessions := svc.Sessions(); sessions != nil {
+			sessStats := sessions.GetStats()
+			pageData.SessionsActive += sessStats.Active
+			pageData.SessionsTotal += sessStats.Total
+		}
+	}
+	if svc := fh.bootnodeService.CLDiscv5Service(); svc != nil {
+		if h := svc.Handler(); h != nil {
+			stats := h.GetStats()
+			pageData.PacketsReceived += stats.PacketsReceived
+			pageData.PacketsSent += stats.PacketsSent
+			pageData.InvalidPackets += stats.InvalidPackets
+			pageData.FilteredResponses += stats.FilteredResponses
+			pageData.FindNodeReceived += stats.FindNodeReceived
+			pageData.PendingHandshakes += stats.PendingHandshakes
+			pageData.PendingChallenges += stats.PendingChallenges
+		}
+		if sessions := svc.Sessions(); sessions != nil {
+			sessStats := sessions.GetStats()
+			pageData.SessionsActive += sessStats.Active
+			pageData.SessionsTotal += sessStats.Total
+		}
+	}
+
+	// Aggregate ping stats
+	if ps := fh.bootnodeService.ELPingService(); ps != nil {
+		stats := ps.GetStats()
+		pageData.PingsSent += stats.PingsSent
+		pageData.PongsReceived += stats.PongsReceived
+	}
+	if ps := fh.bootnodeService.CLPingService(); ps != nil {
+		stats := ps.GetStats()
+		pageData.PingsSent += stats.PingsSent
+		pageData.PongsReceived += stats.PongsReceived
+	}
+	if pageData.PingsSent > 0 {
+		pageData.PingSuccessRate = float64(pageData.PongsReceived) / float64(pageData.PingsSent) * 100
+	}
+
+	// Aggregate lookup stats
+	if ls := fh.bootnodeService.ELLookupService(); ls != nil {
+		stats := ls.GetStats()
+		pageData.LookupsStarted += stats.LookupsStarted
+		pageData.LookupsCompleted += stats.LookupsCompleted
+		pageData.LookupsFailed += stats.LookupsFailed
+	}
+	if ls := fh.bootnodeService.CLLookupService(); ls != nil {
+		stats := ls.GetStats()
+		pageData.LookupsStarted += stats.LookupsStarted
+		pageData.LookupsCompleted += stats.LookupsCompleted
+		pageData.LookupsFailed += stats.LookupsFailed
+	}
+
+	// CL fork filter info
+	if enrMgr := fh.bootnodeService.ENRManager(); enrMgr != nil {
+		if clFilter := enrMgr.GetCLFilter(); clFilter != nil {
+			pageData.CurrentFork = clFilter.GetCurrentFork()
+			pageData.CurrentDigest = clFilter.GetCurrentDigest()
+			pageData.GracePeriod = clFilter.GetGracePeriod()
+			pageData.PreviousFork = clFilter.GetPreviousForkName()
+			pageData.PreviousDigest = clFilter.GetPreviousForkDigest()
+			pageData.GenesisDigest = clFilter.GetGenesisForkDigest()
+
+			oldDigests := clFilter.GetOldDigests()
+			for digest, remaining := range oldDigests {
+				pageData.OldDigests = append(pageData.OldDigests, OldDigestInfo{
+					Digest:    digest,
+					Remaining: remaining,
+				})
+			}
+
+			filterStats := clFilter.GetStats()
+			pageData.FilterAcceptedCurrent = filterStats.AcceptedCurrent
+			pageData.FilterAcceptedOld = filterStats.AcceptedOld
+			pageData.FilterRejectedInvalid = filterStats.RejectedInvalid
+			pageData.FilterRejectedExpired = filterStats.RejectedExpired
+			pageData.FilterTotalChecks = filterStats.TotalChecks
+		}
+	}
 
 	return pageData, nil
 }
