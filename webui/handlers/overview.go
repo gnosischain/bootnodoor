@@ -84,6 +84,12 @@ type OverviewPageData struct {
 	PendingHandshakes int
 	PendingChallenges int
 
+	// Handshake stats
+	ELHandshakesIncoming int64
+	ELHandshakesOutgoing int64
+	CLHandshakesIncoming int64
+	CLHandshakesOutgoing int64
+
 	// Handler stats
 	PacketsReceived   int
 	PacketsSent       int
@@ -519,6 +525,14 @@ func (fh *FrontendHandler) getOverviewPageData() (*OverviewPageData, error) {
 			pageData.FilterTotalChecks = filterStats.TotalChecks
 		}
 	}
+
+	// Handshake stats
+	elIn, elOut := fh.bootnodeService.ELHandshakeStats()
+	clIn, clOut := fh.bootnodeService.CLHandshakeStats()
+	pageData.ELHandshakesIncoming = elIn
+	pageData.ELHandshakesOutgoing = elOut
+	pageData.CLHandshakesIncoming = clIn
+	pageData.CLHandshakesOutgoing = clOut
 
 	return pageData, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethpandaops/bootnodoor/bootnode/clconfig"
@@ -76,6 +77,12 @@ type Service struct {
 	startTime time.Time
 	mu        sync.RWMutex
 	running   bool
+
+	// Handshake counters
+	elHandshakesIncoming atomic.Int64
+	elHandshakesOutgoing atomic.Int64
+	clHandshakesIncoming atomic.Int64
+	clHandshakesOutgoing atomic.Int64
 }
 
 // New creates a new universal bootnode service.
@@ -1113,6 +1120,11 @@ func (s *Service) storeCLENR(record *enr.Record) error {
 // Callbacks for discv5
 
 func (s *Service) onHandshakeCompleteEL(n *v5node.Node, incoming bool) {
+	if incoming {
+		s.elHandshakesIncoming.Add(1)
+	} else {
+		s.elHandshakesOutgoing.Add(1)
+	}
 	s.checkAndAddELNode(n)
 }
 
@@ -1165,6 +1177,11 @@ func (s *Service) checkAndAddELNode(n *v5node.Node) bool {
 // CL discv5 callbacks
 
 func (s *Service) onHandshakeCompleteCL(n *v5node.Node, incoming bool) {
+	if incoming {
+		s.clHandshakesIncoming.Add(1)
+	} else {
+		s.clHandshakesOutgoing.Add(1)
+	}
 	s.checkAndAddCLNode(n)
 }
 
@@ -1629,6 +1646,16 @@ func (s *Service) ELLookupService() *services.LookupService {
 // CLLookupService returns the CL lookup service (may be nil).
 func (s *Service) CLLookupService() *services.LookupService {
 	return s.clLookupService
+}
+
+// ELHandshakeStats returns EL handshake counts.
+func (s *Service) ELHandshakeStats() (incoming, outgoing int64) {
+	return s.elHandshakesIncoming.Load(), s.elHandshakesOutgoing.Load()
+}
+
+// CLHandshakeStats returns CL handshake counts.
+func (s *Service) CLHandshakeStats() (incoming, outgoing int64) {
+	return s.clHandshakesIncoming.Load(), s.clHandshakesOutgoing.Load()
 }
 
 // getELV5Handler returns the EL discv5 protocol handler (may be nil).
