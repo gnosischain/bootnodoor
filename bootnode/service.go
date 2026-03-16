@@ -1148,12 +1148,13 @@ func (s *Service) onFindNodeV5EL(msg *v5protocol.FindNode, sourceNode *v5node.No
 	}
 
 	localID := s.elLocalNode.ID()
-	allNodes := s.elTable.GetNodesByDistance(localID, msg.Distances, 8)
+	allNodes := s.elTable.GetNodesByDistanceUnscored(localID, msg.Distances)
 
 	filteredNodes := s.filterNodesForRequester(allNodes, requester, true, "EL")
+	selected := s.elTable.SelectByScore(filteredNodes, 8)
 
-	v5Nodes := make([]*v5node.Node, 0, len(filteredNodes))
-	for _, n := range filteredNodes {
+	v5Nodes := make([]*v5node.Node, 0, len(selected))
+	for _, n := range selected {
 		if v5 := n.V5(); v5 != nil {
 			v5Nodes = append(v5Nodes, v5)
 		}
@@ -1205,12 +1206,13 @@ func (s *Service) onFindNodeV5CL(msg *v5protocol.FindNode, sourceNode *v5node.No
 	}
 
 	localID := s.clLocalNode.ID()
-	allNodes := s.clTable.GetNodesByDistance(localID, msg.Distances, 8)
+	allNodes := s.clTable.GetNodesByDistanceUnscored(localID, msg.Distances)
 
 	filteredNodes := s.filterNodesForRequester(allNodes, requester, true, "CL")
+	selected := s.clTable.SelectByScore(filteredNodes, 8)
 
-	v5Nodes := make([]*v5node.Node, 0, len(filteredNodes))
-	for _, n := range filteredNodes {
+	v5Nodes := make([]*v5node.Node, 0, len(selected))
+	for _, n := range selected {
 		if v5 := n.V5(); v5 != nil {
 			v5Nodes = append(v5Nodes, v5)
 		}
@@ -1267,17 +1269,18 @@ func (s *Service) onFindNodeV4(from *v4node.Node, target []byte, requester *net.
 	var targetID [32]byte
 	copy(targetID[:], target)
 
-	// For v4, we find closest nodes to the target
-	allNodes := s.elTable.FindClosestNodes(targetID, 16)
-
-	// Filter for v4 support, LAN-aware filtering, and fork filtering
+	// Get all nodes sorted by distance to target, then filter
+	allNodes := s.elTable.FindAllNodesByDistance(targetID)
 	filteredNodes := s.filterNodesForRequester(allNodes, requester, false, "EL")
 
-	// Convert to v4 nodes
-	v4Nodes := make([]*v4node.Node, 0, len(filteredNodes))
+	// Convert to v4 nodes, capped at 16
+	v4Nodes := make([]*v4node.Node, 0, 16)
 	for _, n := range filteredNodes {
 		if v4 := n.V4(); v4 != nil {
 			v4Nodes = append(v4Nodes, v4)
+			if len(v4Nodes) >= 16 {
+				break
+			}
 		}
 	}
 

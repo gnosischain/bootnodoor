@@ -399,6 +399,16 @@ func (t *FlatTable) GetRandomActiveNodes(k int) []*Node {
 
 // FindClosestNodes finds the k closest active nodes to the target ID.
 func (t *FlatTable) FindClosestNodes(target [32]byte, k int) []*Node {
+	all := t.FindAllNodesByDistance(target)
+	if len(all) <= k {
+		return all
+	}
+	return all[:k]
+}
+
+// FindAllNodesByDistance returns all active nodes sorted by XOR distance to the
+// target. Callers can filter and then truncate to the desired count.
+func (t *FlatTable) FindAllNodesByDistance(target [32]byte) []*Node {
 	activeNodes := t.GetActiveNodes()
 
 	if len(activeNodes) == 0 {
@@ -414,8 +424,8 @@ func (t *FlatTable) FindClosestNodes(target [32]byte, k int) []*Node {
 		nodeIDsForFind[i] = node.ID(id)
 	}
 
-	// Find k closest IDs using the discv5/node utility function
-	closestIDs := node.FindClosest(node.ID(target), nodeIDsForFind, k)
+	// Sort all by distance
+	closestIDs := node.FindClosest(node.ID(target), nodeIDsForFind, len(nodeIDsForFind))
 
 	// Convert IDs back to nodes
 	nodeMap := nodesMap(activeNodes)
@@ -804,14 +814,49 @@ func (t *FlatTable) GetNodesByDistance(targetID [32]byte, distances []uint, k in
 	}
 
 	// Score-weighted random selection
-	return t.selectByScore(candidateNodes, k)
+	return t.SelectByScore(candidateNodes, k)
 }
 
-// selectByScore performs score-weighted random selection of k nodes.
+// GetNodesByDistanceUnscored returns all active nodes at the given distances
+// without scoring or limiting. Callers can apply their own filtering before
+// using SelectByScore to pick the final set.
+func (t *FlatTable) GetNodesByDistanceUnscored(targetID [32]byte, distances []uint) []*Node {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if len(t.activeNodes) == 0 {
+		return nil
+	}
+
+	if len(distances) == 1 && distances[0] == 256 {
+		result := make([]*Node, 0, len(t.activeNodes))
+		for _, n := range t.activeNodes {
+			result = append(result, n)
+		}
+		return result
+	}
+
+	distanceMap := make(map[int]bool)
+	for _, d := range distances {
+		distanceMap[int(d)] = true
+	}
+
+	var result []*Node
+	for _, n := range t.activeNodes {
+		dist := node.LogDistance(node.ID(targetID), node.ID(n.ID()))
+		if distanceMap[dist] {
+			result = append(result, n)
+		}
+	}
+
+	return result
+}
+
+// SelectByScore performs score-weighted random selection of k nodes.
 //
 // Nodes with higher scores have higher probability of being selected.
 // This ensures diversity while favoring better nodes.
-func (t *FlatTable) selectByScore(nodes []*Node, k int) []*Node {
+func (t *FlatTable) SelectByScore(nodes []*Node, k int) []*Node {
 	if len(nodes) <= k {
 		return nodes
 	}
