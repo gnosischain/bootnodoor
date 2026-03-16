@@ -1523,6 +1523,11 @@ func (s *Service) filterNodesForRequester(nodeList []*nodes.Node, requester *net
 			continue
 		}
 
+		// Skip dead nodes
+		if !n.IsAlive(nodes.DefaultMaxNodeAge, nodes.DefaultMaxFailures) {
+			continue
+		}
+
 		// Apply fork filtering for responses
 		if s.enrManager != nil {
 			record := n.Record()
